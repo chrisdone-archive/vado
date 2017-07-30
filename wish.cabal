@@ -1,0 +1,35 @@
+name:                wish
+version:             0.0.0
+synopsis:            Web browser
+description:         Web browser
+license:             BSD3
+license-file:        LICENSE
+author:              Chris Done
+maintainer:          chrisdone@gmail.com
+copyright:           2017 Chris Done
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+executable wish
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -O2 -Wall
+  default-language:    Haskell2010
+  build-depends:       base
+                     , linear
+                     , sdl2
+                     , sdl2-cairo
+                     , http-client
+                     , http-types
+                     , html-conduit
+                     , bytestring
+                     , xml-conduit
+                     , text
+                     , mtl
+                     , cairo
+                     , unordered-containers
+                     , http-client-tls
+                     , containers
+                     , network-uri
