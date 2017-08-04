@@ -1,10 +1,9 @@
 # wish
 
-This is a demonstration program that is able to load a web page up and
-render it like in the early 90's. It supports laying out text,
+This is a **demonstration program** that is able to load a web page up
+and render it like in the early 90's. It supports laying out text,
 different font sizes for headings, inline and block elements,
-hyperlinks, bold and italics. It supports mousewheel scrolling,
-too.
+hyperlinks, bold and italics. It supports mousewheel scrolling, too.
 
 I wrote this in a couple evenings, because it seemed straight-forward
 to do so given the libraries available today.
