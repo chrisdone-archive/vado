@@ -29,15 +29,18 @@ cross-platform Cairo package for rendering text.
 
 ## Building
 
+[Get Stack](https://haskell-lang.org/get-started) for building Haskell
+projects.
+
 OS X instructions:
 
     $ brew install sdl2 cairo
-    $ stack install
+    $ stack install --install-ghc
 
 Ubuntu Linux instructions:
 
     $ sudo apt-get install libsdl2-dev libcairo2-dev
-    $ stack install
+    $ stack install --install-ghc
 
 ## Running
 
