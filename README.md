@@ -46,12 +46,14 @@ projects.
 OS X instructions:
 
     $ brew install sdl2 cairo
-    $ stack install --install-ghc
+    $ stack install --install-ghc gtk2hs-buildtools
+    $ stack install
 
 Ubuntu Linux instructions:
 
     $ sudo apt-get install libsdl2-dev libcairo2-dev
-    $ stack install --install-ghc
+    $ stack install --install-ghc gtk2hs-buildtools
+    $ stack install
 
 ## Running
 
