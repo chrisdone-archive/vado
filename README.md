@@ -6,6 +6,9 @@ different font sizes for headings, inline and block elements,
 hyperlinks, bold and italics. It supports mousewheel scrolling,
 too.
 
+I wrote this in a couple evenings, because it seemed straight-forward
+to do so given the libraries available today.
+
 The project uses a few established Haskell packages:
 
 * [http-client](https://www.stackage.org/package/http-client) for downloading via HTTP.
@@ -15,8 +18,8 @@ The project uses a few established Haskell packages:
 * [xml-conduit](https://www.stackage.org/package/xml-conduit) for dealing with the XML tree.
 * [sdl2](https://www.stackage.org/package/sdl2) for creating a window and rendering context, handling mouse
   events.
-* [sdl2-cairo](https://www.stackage.org/package/sdl2-cairo) and
-  [cairo](https://www.stackage.org/package/sdl2-cairo) for rendering text
+* [sdl2-cairo](https://hackage.haskell.org/package/sdl2-cairo) and
+  [cairo](https://www.stackage.org/package/cairo) for rendering text
   onto the SDL surface.
 * [network-uri](https://www.stackage.org/package/network-uri) for parsing URIs and combining them.
 
