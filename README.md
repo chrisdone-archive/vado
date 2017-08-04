@@ -8,17 +8,17 @@ too.
 
 The project uses a few established Haskell packages:
 
-* [http-client](https://stackage.org/package/http-client) for downloading via HTTP.
-* [http-client-tls](https://stackage.org/package/http-client-tls) for TLS support.
-* [html-conduit](https://stackage.org/package/html-conduit) for parsing the HTML in "quirks mode", i.e. supporting
+* [http-client](https://www.stackage.org/package/http-client) for downloading via HTTP.
+* [http-client-tls](https://www.stackage.org/package/http-client-tls) for TLS support.
+* [html-conduit](https://www.stackage.org/package/html-conduit) for parsing the HTML in "quirks mode", i.e. supporting
   garbage HTML.
-* [xml-conduit](https://stackage.org/package/xml-conduit) for dealing with the XML tree.
-* [sdl2](https://stackage.org/package/sdl2) for creating a window and rendering context, handling mouse
+* [xml-conduit](https://www.stackage.org/package/xml-conduit) for dealing with the XML tree.
+* [sdl2](https://www.stackage.org/package/sdl2) for creating a window and rendering context, handling mouse
   events.
-* [sdl2-cairo](https://stackage.org/package/sdl2-cairo) and
-  [cairo](https://stackage.org/package/sdl2-cairo) for rendering text
+* [sdl2-cairo](https://www.stackage.org/package/sdl2-cairo) and
+  [cairo](https://www.stackage.org/package/sdl2-cairo) for rendering text
   onto the SDL surface.
-* [network-uri](https://stackage.org/package/network-uri) for parsing URIs and combining them.
+* [network-uri](https://www.stackage.org/package/network-uri) for parsing URIs and combining them.
 
 This project is intended to be easy to build. If you succeed in
 building this package on a platform that isn't listed in the
