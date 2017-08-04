@@ -34,6 +34,11 @@ OS X instructions:
     $ brew install sdl2 cairo
     $ stack install
 
+Ubuntu Linux instructions:
+
+    $ sudo apt-get install libsdl2-dev libcairo2-dev
+    $ stack install
+
 ## Running
 
 It accepts an initial home page URL:
