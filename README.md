@@ -3,7 +3,8 @@
 This is a demonstration program that is able to load a web page up and
 render it like in the early 90's. It supports laying out text,
 different font sizes for headings, inline and block elements,
-hyperlinks, bold and italics. It supports mousewheel scrolling, too.
+hyperlinks, bold and italics. It supports mousewheel scrolling,
+too.
 
 The project uses a few established Haskell packages:
 
@@ -22,6 +23,11 @@ building this package on a platform that isn't listed in the
 *Building* section, please open a PR with those instructions. It uses
 the cross-platform SDL package, and the probably-less-so
 cross-platform Cairo package for rendering text.
+
+There's some groundwork for rendering boxes, padding, etc. but no
+attempt has been made to implement that. One could use the
+[language-css](http://hackage.haskell.org/package/language-css)
+package to parse CSS and add styling to elements.
 
 ## Demo
 
