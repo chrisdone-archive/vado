@@ -87,6 +87,18 @@ newtype Measuring a =
   Measuring {runMeasuring :: Canvas.Canvas a}
   deriving (Monad, Functor, Applicative)
 
+-- | Line-state. The state of rendering line-broken text.
+data LS = LS
+  { lsX :: Double
+  , lsY :: Double
+  , lsLineHeight :: Double
+    -- ^ The line height gets increased every time we render a font
+    -- larger than the last rendered thing.
+  , lsMaxHeight :: Double
+    -- ^ The maximum rendering height. This is just a small
+    -- optimization to not render more than needed.
+  }
+
 -- | Main entry point.
 --
 -- * Read in commandline argument with the URL.
@@ -333,13 +345,6 @@ elementStyles =
   where
     inline name = (name, defaultStyle {styleDisplay = InlineDisplay})
     inline' name f = (name, f (defaultStyle {styleDisplay = InlineDisplay}))
-
-data LS = LS
-  { lsX :: Double
-  , lsY :: Double
-  , lsLineHeight :: Double
-  , lsMaxHeight :: Double
-  }
 
 -- | Convert an element to boxes.
 inlineToBoxes :: LS -> Double -> Events -> Style -> [Content] -> Measuring (LS, [Box])
