@@ -32,6 +32,9 @@ import           System.Environment
 import qualified Text.HTML.DOM as DOM
 import qualified Text.XML as XML
 
+--------------------------------------------------------------------------------
+-- Types
+
 -- | Some content, either a block or inline element, or some text.
 data Content
   = ElementContent !Text !Events !Style ![Content]
@@ -68,10 +71,16 @@ data Box
   = RectBox !Canvas.Dim !(Maybe Canvas.Color)
   | TextBox !Events !TextBox
 
+-- | A set of events that an element may handle.
 data Events = Events
   { eventsClick :: Maybe ((URI -> IO ()) -> IO () -> IO ())
+    -- ^ A handler accepting two arguments: either a loadUrl or a "do
+    -- nothing" action. This was thrown together at the last minute to
+    -- support clicking links.
   }
 
+-- | A box of text to be rendered on the screen at the given
+-- coordinates with the given style.
 data TextBox = Text
   { textXY :: !(V2 Double)
   , textWH :: !(V2 Double)
@@ -98,6 +107,9 @@ data LS = LS
     -- ^ The maximum rendering height. This is just a small
     -- optimization to not render more than needed.
   }
+
+--------------------------------------------------------------------------------
+-- Main entry point and event handler
 
 -- | Main entry point.
 --
@@ -131,6 +143,7 @@ main = do
   -- Render the page immediately.
   boxes0 <- rerender renderer texture0 content0 0
   -- Setup an event loop to handle events or quit. Re-render on each event.
+  -- This set of arguments would be better collapsed into a record.
   let eloop texture scrollY boxes content request = do
         e <- waitEvent
         case eventPayload e of
@@ -174,6 +187,11 @@ main = do
             eloop texture scrollY boxes content request
   eloop texture0 0 boxes0 content0 request0
 
+--------------------------------------------------------------------------------
+-- Web request
+
+-- | Make a web request and then parse the HTML, convert it to the
+-- more normalized Content type.
 getContent :: HTTP.Request -> IO Content
 getContent request = do
   -- Make a blocking request to the URL.
@@ -184,6 +202,11 @@ getContent request = do
       content = elementToContent doc
   pure content
 
+--------------------------------------------------------------------------------
+-- Mouse events
+
+-- | Does the point overlap the rectangle of text? Text is rendered
+-- above the y, not below it. So that explains the calculation below.
 overlaps :: Point V2 Int32 -> Canvas.Dim -> Bool
 overlaps (P (V2 x0 y0)) (Canvas.D px py0 pw ph) =
   x >= px && y >= py && x <= px + pw && y <= py + ph
@@ -192,6 +215,7 @@ overlaps (P (V2 x0 y0)) (Canvas.D px py0 pw ph) =
     y = fromIntegral y0
     py = py0 - ph
 
+-- | If an element has a click event, i.e. anchor elements, extract that.
 getClickEvent :: Box -> Maybe (((URI -> IO ()) -> IO () -> IO ()), Canvas.Dim)
 getClickEvent =
   \case
@@ -202,49 +226,8 @@ getClickEvent =
       pure (handler, Canvas.D x y w h)
     _ -> Nothing
 
--- | Re-render the canvas.
-rerender :: SDL.Renderer -> SDL.Texture -> Content -> Double -> IO [Box]
-rerender renderer texture content scrollY = do
-  boxes <-
-    Canvas.withCanvas texture $ do
-      Canvas.background $ Canvas.rgb 255 255 255
-      (V2 width height) <- Canvas.getCanvasSize
-      (_, boxes) <-
-        runMeasuring
-          (blockToBoxes
-             (LS
-              {lsX = 0, lsY = scrollY, lsLineHeight = 0, lsMaxHeight = height})
-             width
-             defaultEvents
-             defaultStyle {styleWidth = Just width}
-             [content])
-      mapM_
-        (\box ->
-           case box of
-             RectBox dim mcolor -> do
-               case mcolor of
-                 Just color -> do
-                   Canvas.fill color
-                   Canvas.rect dim
-                 Nothing -> pure ()
-             TextBox _ text -> do
-               Canvas.stroke (textColor text)
-               Canvas.textFont
-                 (Canvas.Font
-                    "Arial"
-                    (textSize text)
-                    (case textWeight text of
-                       BoldWeight -> True
-                       NormalWeight -> False)
-                    (case textStyle text of
-                       ItalicStyle -> True
-                       NormalStyle -> False))
-               Canvas.textBaseline (T.unpack (textText text)) (textXY text))
-        boxes
-      pure boxes
-  SDL.copy renderer texture Nothing Nothing
-  SDL.present renderer
-  pure boxes
+--------------------------------------------------------------------------------
+-- Converting XML tree to a normalized content tree
 
 -- | Normalize an XML tree of elements and text, possibly with
 -- attributes like style and event handlers.
@@ -300,73 +283,8 @@ elementToContent element =
   where
     name = XML.nameLocalName (XML.elementName element)
 
--- | Default stylings for standard HTML elements.
-elementStyles :: HM.HashMap Text Style
-elementStyles =
-  HM.fromList
-    ([ ( T.pack ("h" ++ show n)
-       , defaultStyle
-         {styleFontSize = Just size, styleFontWeight = Just BoldWeight})
-     | (n :: Int, size :: Double) <- zip [1 .. 6] [40, 35, 20, 25, 20, 18]
-     ] ++
-     [ inline' "a" (\s -> s {styleColor = Just (Canvas.rgb 0 0 255)})
-     , inline "b"
-     , inline "big"
-     , inline "i"
-     , inline "small"
-     , inline "tt"
-     , inline "abbr"
-     , inline "acronym"
-     , inline "cite"
-     , inline "code"
-     , inline "dfn"
-     , inline' "em" (\s -> s {styleFontStyle = Just ItalicStyle})
-     , inline "kbd"
-     , inline' "strong" (\s -> s {styleFontWeight = Just BoldWeight})
-     , inline "samp"
-     , inline "time"
-     , inline "var"
-     , inline "bdo"
-     , inline "br"
-     , inline "img"
-     , inline "map"
-     , inline "object"
-     , inline "q"
-     , inline "script"
-     , inline "span"
-     , inline "sub"
-     , inline "sup"
-     , inline "button"
-     , inline "input"
-     , inline "label"
-     , inline "select"
-     , inline "textarea"
-     ])
-  where
-    inline name = (name, defaultStyle {styleDisplay = InlineDisplay})
-    inline' name f = (name, f (defaultStyle {styleDisplay = InlineDisplay}))
-
--- | Convert an element to boxes.
-inlineToBoxes :: LS -> Double -> Events -> Style -> [Content] -> Measuring (LS, [Box])
-inlineToBoxes ls0 maxWidth events0 inheritedStyle nodes0 = do
-  if lsY ls0 > lsMaxHeight ls0
-    then pure (ls0, [])
-    else fmap
-           (second concat)
-           (mapAccumM
-              (\ls content ->
-                 case content of
-                   TextContent t ->
-                     textToBoxes ls events0 inheritedStyle maxWidth t
-                   ElementContent _ events style nodes ->
-                     inlineToBoxes
-                       ls
-                       maxWidth
-                       events
-                       (mergeStyles inheritedStyle style)
-                       nodes)
-              ls0
-              nodes0)
+--------------------------------------------------------------------------------
+-- Laying out content to a list of absolutely-positioned boxes
 
 -- | Convert an element to boxes.
 blockToBoxes :: LS -> Double -> Events -> Style -> [Content] -> Measuring (LS, [Box])
@@ -403,6 +321,29 @@ blockToBoxes ls0 maxWidth events0 inheritedStyle nodes0 =
               ls0
               nodes0)
 
+-- | Convert an element to boxes.
+inlineToBoxes :: LS -> Double -> Events -> Style -> [Content] -> Measuring (LS, [Box])
+inlineToBoxes ls0 maxWidth events0 inheritedStyle nodes0 = do
+  if lsY ls0 > lsMaxHeight ls0
+    then pure (ls0, [])
+    else fmap
+           (second concat)
+           (mapAccumM
+              (\ls content ->
+                 case content of
+                   TextContent t ->
+                     textToBoxes ls events0 inheritedStyle maxWidth t
+                   ElementContent _ events style nodes ->
+                     inlineToBoxes
+                       ls
+                       maxWidth
+                       events
+                       (mergeStyles inheritedStyle style)
+                       nodes)
+              ls0
+              nodes0)
+
+-- | Layout text word-by-word with line-breaking.
 textToBoxes :: LS -> Events -> Style -> Double -> Text -> Measuring (LS, [Box])
 textToBoxes ls0 events style maxWidth t = do
   mapAccumM
@@ -451,6 +392,61 @@ textToBoxes ls0 events style maxWidth t = do
             Canvas.textSize (T.unpack w))
     extents = Measuring Canvas.fontExtents
 
+--------------------------------------------------------------------------------
+-- SDL rendering to the canvas
+
+-- | Re-render the canvas. The boxes are computed by blockToBoxes,
+-- this function simply renders the boxes that it's told to render.
+--
+-- Later, it might calculate the height of the document, then create a
+-- fresh texture which it could scroll simply by passing extra
+-- arguments to copy of a region to copy offset by some Y.
+rerender :: SDL.Renderer -> SDL.Texture -> Content -> Double -> IO [Box]
+rerender renderer texture content scrollY = do
+  boxes <-
+    Canvas.withCanvas texture $ do
+      Canvas.background $ Canvas.rgb 255 255 255
+      (V2 width height) <- Canvas.getCanvasSize
+      (_, boxes) <-
+        runMeasuring
+          (blockToBoxes
+             (LS
+              {lsX = 0, lsY = scrollY, lsLineHeight = 0, lsMaxHeight = height})
+             width
+             defaultEvents
+             defaultStyle {styleWidth = Just width}
+             [content])
+      mapM_
+        (\box ->
+           case box of
+             RectBox dim mcolor -> do
+               case mcolor of
+                 Just color -> do
+                   Canvas.fill color
+                   Canvas.rect dim
+                 Nothing -> pure ()
+             TextBox _ text -> do
+               Canvas.stroke (textColor text)
+               Canvas.textFont
+                 (Canvas.Font
+                    "Arial"
+                    (textSize text)
+                    (case textWeight text of
+                       BoldWeight -> True
+                       NormalWeight -> False)
+                    (case textStyle text of
+                       ItalicStyle -> True
+                       NormalStyle -> False))
+               Canvas.textBaseline (T.unpack (textText text)) (textXY text))
+        boxes
+      pure boxes
+  SDL.copy renderer texture Nothing Nothing
+  SDL.present renderer
+  pure boxes
+
+--------------------------------------------------------------------------------
+-- Styles
+
 -- | Merge the inherited style and the element style.
 mergeStyles :: Style -> Style -> Style
 mergeStyles inherited element =
@@ -484,6 +480,52 @@ defaultStyle =
   , styleFontStyle = Nothing
   }
 
+-- | Default stylings for standard HTML elements.
+elementStyles :: HM.HashMap Text Style
+elementStyles =
+  HM.fromList
+    ([ ( T.pack ("h" ++ show n)
+       , defaultStyle
+         {styleFontSize = Just size, styleFontWeight = Just BoldWeight})
+     | (n :: Int, size :: Double) <- zip [1 .. 6] [40, 35, 20, 25, 20, 18]
+     ] ++
+     [ inline' "a" (\s -> s {styleColor = Just (Canvas.rgb 0 0 255)})
+     , inline "b"
+     , inline "big"
+     , inline "i"
+     , inline "small"
+     , inline "tt"
+     , inline "abbr"
+     , inline "acronym"
+     , inline "cite"
+     , inline "code"
+     , inline "dfn"
+     , inline' "em" (\s -> s {styleFontStyle = Just ItalicStyle})
+     , inline "kbd"
+     , inline' "strong" (\s -> s {styleFontWeight = Just BoldWeight})
+     , inline "samp"
+     , inline "time"
+     , inline "var"
+     , inline "bdo"
+     , inline "br"
+     , inline "img"
+     , inline "map"
+     , inline "object"
+     , inline "q"
+     , inline "script"
+     , inline "span"
+     , inline "sub"
+     , inline "sup"
+     , inline "button"
+     , inline "input"
+     , inline "label"
+     , inline "select"
+     , inline "textarea"
+     ])
+  where
+    inline name = (name, defaultStyle {styleDisplay = InlineDisplay})
+    inline' name f = (name, f (defaultStyle {styleDisplay = InlineDisplay}))
+
 -- | Default text color.
 defaultColor :: Canvas.Color
 defaultColor = Canvas.rgb 0 0 0
@@ -509,6 +551,9 @@ defaultFontFace = "Arial"
 
 defaultEvents :: Events
 defaultEvents = Events Nothing
+
+--------------------------------------------------------------------------------
+-- Utilities
 
 -- | Map over the list, accumulating a state.
 mapAccumM :: Monad m => (state -> a -> m (state, b)) -> state -> [a] -> m (state, [b])
