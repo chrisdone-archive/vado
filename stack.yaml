@@ -2,6 +2,10 @@ resolver: lts-9.0
 packages:
 - .
 - location:
+    git: https://github.com/haskell-game/sdl2.git
+    commit: a43c202511b5654680c45098e2c32c45c3655bc4
+  extra-dep: true
+- location:
     git: https://github.com/chrisdone/sdl2-cairo.git
     commit: fab0d5128feefe0941336af79d8b3ad63c5db00c
   extra-dep: true
