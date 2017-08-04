@@ -6,9 +6,12 @@ different font sizes for headings, inline and block elements,
 hyperlinks, bold and italics. It supports mousewheel scrolling, too.
 
 I wrote this in a couple evenings, because it seemed straight-forward
-to do so given the libraries available today.
+to do so given the libraries available today. That's a good sign for 
+Haskell. Also, there's an inarticulate gut feeling I have that tells
+me maybe it's worth celebrating these days in which the web is still
+viewable in its simplest, earliest form. 
 
-The project uses a few established Haskell packages:
+The project was possible thanks to a few established Haskell packages:
 
 * [http-client](https://www.stackage.org/package/http-client) for downloading via HTTP.
 * [http-client-tls](https://www.stackage.org/package/http-client-tls) for TLS support.
@@ -22,7 +25,7 @@ The project uses a few established Haskell packages:
   onto the SDL surface.
 * [network-uri](https://www.stackage.org/package/network-uri) for parsing URIs and combining them.
 
-This project is intended to be easy to build. If you succeed in
+This project is intended to be easy to build and cross-platform. If you succeed in
 building this package on a platform that isn't listed in the
 *Building* section, please open a PR with those instructions. It uses
 the cross-platform SDL package, and the probably-less-so
