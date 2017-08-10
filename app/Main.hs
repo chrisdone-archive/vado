@@ -108,6 +108,16 @@ data LS = LS
     -- optimization to not render more than needed.
   }
 
+-- | State for the event handler.
+data EV = EV
+  { evRequest :: Request
+  , evContent :: Content
+  , evBoxes :: [Box]
+  , evScrollY :: Double
+  , evTexture :: SDL.Texture
+  , evRenderer :: SDL.Renderer
+  }
+
 --------------------------------------------------------------------------------
 -- Main entry point and event handler
 
@@ -141,51 +151,66 @@ main = do
       SDL.defaultRenderer {SDL.rendererType = SDL.SoftwareRenderer}
   texture0 <- Cairo.createCairoTexture renderer defaultWindowSize
   -- Render the page immediately.
-  boxes0 <- rerender renderer texture0 content0 0
+  let ev0 = EV request0 content0 [] 0 texture0 renderer
+  boxes0 <- rerender ev0
   -- Setup an event loop to handle events or quit. Re-render on each event.
   -- This set of arguments would be better collapsed into a record.
-  let eloop texture scrollY boxes content request = do
-        e <- waitEvent
-        case eventPayload e of
-          QuitEvent -> return ()
-          WindowClosedEvent {} -> return ()
-          MouseButtonEvent ev ->
-            case mouseButtonEventMotion ev of
-              Released -> do
-                case find
-                       (overlaps (mouseButtonEventPos ev) . snd)
-                       (reverse (mapMaybe getClickEvent boxes)) of
-                  Just (handler, _) ->
-                    let loadUrl uri = do
-                          request' <- setUriRelative request uri
-                          putStrLn ("Downloading: " ++ show request')
-                          content' <- getContent request'
-                          let scrollY' = 0
-                          boxes' <- rerender renderer texture content' scrollY'
-                          eloop texture scrollY' boxes' content' request'
-                        continue = eloop texture scrollY boxes content request
-                    in handler loadUrl continue
-                  _ -> eloop texture scrollY boxes content request
-              _ -> eloop texture scrollY boxes content request
-          MouseWheelEvent ev -> do
-            let scrollY' =
-                  min
-                    0
-                    (scrollY +
-                     (let V2 _ y = mouseWheelEventPos ev
-                      in fromIntegral y))
-            boxes' <- rerender renderer texture content scrollY'
-            eloop texture scrollY' boxes' content request
-          WindowResizedEvent ev -> do
-            texture' <-
-              Cairo.createCairoTexture
-                renderer
-                (fmap fromIntegral (windowResizedEventSize ev))
-            boxes' <- rerender renderer texture' content scrollY
-            eloop texture' scrollY boxes' content request
-          _ -> do
-            eloop texture scrollY boxes content request
-  eloop texture0 0 boxes0 content0 request0
+  eloop ev0 {evBoxes = boxes0}
+
+-- | Event loop.
+eloop :: EV -> IO ()
+eloop ev = do
+  event <- waitEvent
+  case eventPayload event of
+    QuitEvent -> return ()
+    WindowClosedEvent {} -> return ()
+    MouseButtonEvent e ->
+      case mouseButtonEventMotion e of
+        Released -> do
+          case find
+                 (overlaps (mouseButtonEventPos e) . snd)
+                 (reverse (mapMaybe getClickEvent (evBoxes ev))) of
+            Just (handler, _) ->
+              let loadUrl uri = do
+                    request' <- setUriRelative (evRequest ev) uri
+                    putStrLn ("Downloading: " ++ show request')
+                    content' <- getContent request'
+                    let scrollY' = 0
+                    boxes' <-
+                      rerender ev {evContent = content', evScrollY = scrollY'}
+                    eloop
+                      ev
+                      { evScrollY = scrollY'
+                      , evBoxes = boxes'
+                      , evContent = content'
+                      , evRequest = request'
+                      }
+                  continue = eloop ev
+              in handler loadUrl continue
+            _ -> eloop ev
+        _ -> eloop ev
+    MouseWheelEvent e -> do
+      let ev' =
+            ev
+            { evScrollY =
+                min
+                  0
+                  (evScrollY ev +
+                   (let V2 _ y = mouseWheelEventPos e
+                    in fromIntegral y))
+            }
+      boxes' <- rerender ev'
+      eloop ev' {evBoxes = boxes'}
+    WindowResizedEvent e -> do
+      texture' <-
+        Cairo.createCairoTexture
+          (evRenderer ev)
+          (fmap fromIntegral (windowResizedEventSize e))
+      let ev' = ev {evTexture = texture'}
+      boxes' <- rerender ev'
+      eloop ev' {evBoxes = boxes'}
+    _ -> do
+      eloop ev
 
 --------------------------------------------------------------------------------
 -- Web request
@@ -401,21 +426,21 @@ textToBoxes ls0 events style maxWidth t = do
 -- Later, it might calculate the height of the document, then create a
 -- fresh texture which it could scroll simply by passing extra
 -- arguments to copy of a region to copy offset by some Y.
-rerender :: SDL.Renderer -> SDL.Texture -> Content -> Double -> IO [Box]
-rerender renderer texture content scrollY = do
+rerender :: EV -> IO [Box]
+rerender ev = do
   boxes <-
-    Canvas.withCanvas texture $ do
+    Canvas.withCanvas (evTexture ev) $ do
       Canvas.background $ Canvas.rgb 255 255 255
       (V2 width height) <- Canvas.getCanvasSize
       (_, boxes) <-
         runMeasuring
           (blockToBoxes
              (LS
-              {lsX = 0, lsY = scrollY, lsLineHeight = 0, lsMaxHeight = height})
+              {lsX = 0, lsY = (evScrollY ev), lsLineHeight = 0, lsMaxHeight = height})
              width
              defaultEvents
              defaultStyle {styleWidth = Just width}
-             [content])
+             [(evContent ev)])
       mapM_
         (\box ->
            case box of
@@ -440,8 +465,8 @@ rerender renderer texture content scrollY = do
                Canvas.textBaseline (T.unpack (textText text)) (textXY text))
         boxes
       pure boxes
-  SDL.copy renderer texture Nothing Nothing
-  SDL.present renderer
+  SDL.copy (evRenderer ev) (evTexture ev) Nothing Nothing
+  SDL.present (evRenderer ev)
   pure boxes
 
 --------------------------------------------------------------------------------
