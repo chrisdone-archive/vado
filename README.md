@@ -57,6 +57,13 @@ Ubuntu Linux instructions:
     $ stack install --install-ghc gtk2hs-buildtools
     $ stack install
 
+FreeBSD instructions:
+
+    $ pkg install cairo
+    $ pkg install sdl2
+    $ stack install --install-ghc gtk2hs-buildtools
+    $ stack install
+
 Windows instructions
 
     $ stack exec -- pacman -Sy mingw-w64-x86_64-cairo mingw-w64-x86_64-pkg-config mingw-w64-x86_64-SDL2
