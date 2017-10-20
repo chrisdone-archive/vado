@@ -6,10 +6,10 @@ different font sizes for headings, inline and block elements,
 hyperlinks, bold and italics. It supports mousewheel scrolling, too.
 
 I wrote this in a couple evenings, because it seemed straight-forward
-to do so given the libraries available today. That's a good sign for 
+to do so given the libraries available today. That's a good sign for
 Haskell. Also, there's an inarticulate gut feeling I have that tells
 me maybe it's worth celebrating these days in which the web is still
-viewable in its simplest, earliest form. 
+viewable in its simplest, earliest form.
 
 The project was possible thanks to a few established Haskell packages:
 
@@ -38,7 +38,7 @@ package to parse CSS and add styling to elements.
 
 ## Demo
 
-![Demo video](http://i.imgur.com/189nfP4.gif)
+![Demo video](https://i.imgur.com/vDhpsMw.gif)
 
 ## Building
 

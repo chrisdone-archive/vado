@@ -9,9 +9,9 @@
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad
+import           Control.Monad.Reader
 import           Data.Char
 import qualified Data.HashMap.Strict as HM
-import           Data.Int
 import           Data.List
 import qualified Data.Map.Strict as M
 import           Data.Maybe
@@ -93,7 +93,7 @@ data TextBox = Text
 
 -- | A text size measurer.
 newtype Measuring a =
-  Measuring {runMeasuring :: Canvas.Canvas a}
+  Measuring {runMeasuring :: ReaderT Double Canvas.Canvas a}
   deriving (Monad, Functor, Applicative)
 
 -- | Line-state. The state of rendering line-broken text.
@@ -144,22 +144,23 @@ main = do
       , SDL.windowInitialSize = defaultWindowSize
       }
   -- Setup Cairo rendering on the window.
-  renderer <-
-    SDL.createRenderer
-      window
-      (-1)
-      SDL.defaultRenderer {SDL.rendererType = SDL.SoftwareRenderer}
-  texture0 <- Cairo.createCairoTexture renderer defaultWindowSize
+  renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
+  Just (SDL.Rectangle _ viewport@(V2 w h)) <-
+    SDL.get (SDL.rendererViewport renderer)
+  texture0 <- Cairo.createCairoTexture renderer viewport
   -- Render the page immediately.
   let ev0 = EV request0 content0 [] 0 texture0 renderer
-  boxes0 <- rerender ev0
+  let scale@(_, scaley) =
+        let (V2 w0 h0) = defaultWindowSize
+        in (fromIntegral w / w0, fromIntegral h / h0)
+  boxes0 <- rerender scaley ev0
   -- Setup an event loop to handle events or quit. Re-render on each event.
   -- This set of arguments would be better collapsed into a record.
-  eloop ev0 {evBoxes = boxes0}
+  eloop scale ev0 {evBoxes = boxes0}
 
 -- | Event loop.
-eloop :: EV -> IO ()
-eloop ev = do
+eloop :: (Double, Double) -> EV -> IO ()
+eloop scale@(scalex, scaley) ev = do
   event <- waitEvent
   case eventPayload event of
     QuitEvent -> return ()
@@ -168,7 +169,13 @@ eloop ev = do
       case mouseButtonEventMotion e of
         Released -> do
           case find
-                 (overlaps (mouseButtonEventPos e) . snd)
+                 (overlaps
+                    (let P (V2 w h) = mouseButtonEventPos e
+                     in P
+                          (V2
+                             (fromIntegral w * scalex)
+                             (fromIntegral h * scaley))) .
+                  snd)
                  (reverse (mapMaybe getClickEvent (evBoxes ev))) of
             Just (handler, _) ->
               let loadUrl uri = do
@@ -177,18 +184,21 @@ eloop ev = do
                     content' <- getContent request'
                     let scrollY' = 0
                     boxes' <-
-                      rerender ev {evContent = content', evScrollY = scrollY'}
+                      rerender
+                        scaley
+                        ev {evContent = content', evScrollY = scrollY'}
                     eloop
+                      scale
                       ev
                       { evScrollY = scrollY'
                       , evBoxes = boxes'
                       , evContent = content'
                       , evRequest = request'
                       }
-                  continue = eloop ev
+                  continue = eloop scale ev
               in handler loadUrl continue
-            _ -> eloop ev
-        _ -> eloop ev
+            _ -> eloop scale ev
+        _ -> eloop scale ev
     MouseWheelEvent e -> do
       let ev' =
             ev
@@ -199,18 +209,18 @@ eloop ev = do
                    (let V2 _ y = mouseWheelEventPos e
                     in fromIntegral y))
             }
-      boxes' <- rerender ev'
-      eloop ev' {evBoxes = boxes'}
+      boxes' <- rerender scaley ev'
+      eloop scale ev' {evBoxes = boxes'}
     WindowResizedEvent e -> do
       texture' <-
         Cairo.createCairoTexture
           (evRenderer ev)
           (fmap fromIntegral (windowResizedEventSize e))
       let ev' = ev {evTexture = texture'}
-      boxes' <- rerender ev'
-      eloop ev' {evBoxes = boxes'}
+      boxes' <- rerender scaley ev'
+      eloop scale ev' {evBoxes = boxes'}
     _ -> do
-      eloop ev
+      eloop scale ev
 
 --------------------------------------------------------------------------------
 -- Web request
@@ -232,12 +242,10 @@ getContent request = do
 
 -- | Does the point overlap the rectangle of text? Text is rendered
 -- above the y, not below it. So that explains the calculation below.
-overlaps :: Point V2 Int32 -> Canvas.Dim -> Bool
-overlaps (P (V2 x0 y0)) (Canvas.D px py0 pw ph) =
+overlaps :: Point V2 Double -> Canvas.Dim -> Bool
+overlaps (P (V2 x y)) (Canvas.D px py0 pw ph) =
   x >= px && y >= py && x <= px + pw && y <= py + ph
   where
-    x = fromIntegral x0
-    y = fromIntegral y0
     py = py0 - ph
 
 -- | If an element has a click event, i.e. anchor elements, extract that.
@@ -373,15 +381,16 @@ textToBoxes :: LS -> Events -> Style -> Double -> Text -> Measuring (LS, [Box])
 textToBoxes ls0 events style maxWidth t = do
   mapAccumM
     (\ls word -> do
+       scale <- Measuring ask
        wh@(V2 width _) <- measure word
        let ls' =
              if lsX ls + width > maxWidth
                then ls
-                    {lsX = 0, lsY = lsY ls + lsLineHeight ls, lsLineHeight = lineHeight}
-               else ls {lsLineHeight = max (lsLineHeight ls) lineHeight}
+                    {lsX = 0, lsY = lsY ls + lsLineHeight ls, lsLineHeight = (lineHeight scale)}
+               else ls {lsLineHeight = max (lsLineHeight ls) (lineHeight scale)}
        fe <- extents
        pure
-         ( ls' {lsX = (lsX ls' + width + space), lsY = lsY ls'}
+         ( ls' {lsX = (lsX ls' + width + space scale), lsY = lsY ls'}
          , TextBox
              events
              (Text
@@ -389,7 +398,7 @@ textToBoxes ls0 events style maxWidth t = do
               , textWH = wh
               , textColor = color
               , textWeight = weight
-              , textSize = fontSize
+              , textSize = fontSize scale
               , textText = word
               , textStyle = fontStyle
               })))
@@ -397,11 +406,11 @@ textToBoxes ls0 events style maxWidth t = do
     (T.words t)
   where
     fontStyle = fromMaybe defaultFontStyle (styleFontStyle style)
-    space = (fontSize / 2)
+    space scale = (fontSize scale / 2)
     color = fromMaybe defaultColor (styleColor style)
-    fontSize = fromMaybe defaultFontSize (styleFontSize style)
-    lineHeight =
-      fontSize * (fromMaybe defaultLineHeight (styleLineHeight style))
+    fontSize scale = fromMaybe defaultFontSize (styleFontSize style) * scale
+    lineHeight scale =
+      fontSize scale * (fromMaybe defaultLineHeight (styleLineHeight style))
     weight = fromMaybe defaultWeight (styleFontWeight style)
     bold =
       case weight of
@@ -413,9 +422,10 @@ textToBoxes ls0 events style maxWidth t = do
         _ -> False
     measure w =
       Measuring
-        (do Canvas.textFont (Canvas.Font defaultFontFace fontSize bold italic)
-            Canvas.textSize (T.unpack w))
-    extents = Measuring Canvas.fontExtents
+        (do scale <- ask
+            lift (Canvas.textFont (Canvas.Font defaultFontFace (fontSize scale) bold italic))
+            lift (Canvas.textSize (T.unpack w)))
+    extents = Measuring (lift Canvas.fontExtents)
 
 --------------------------------------------------------------------------------
 -- SDL rendering to the canvas
@@ -426,21 +436,27 @@ textToBoxes ls0 events style maxWidth t = do
 -- Later, it might calculate the height of the document, then create a
 -- fresh texture which it could scroll simply by passing extra
 -- arguments to copy of a region to copy offset by some Y.
-rerender :: EV -> IO [Box]
-rerender ev = do
+rerender :: Double -> EV -> IO [Box]
+rerender scale ev = do
   boxes <-
     Canvas.withCanvas (evTexture ev) $ do
       Canvas.background $ Canvas.rgb 255 255 255
       (V2 width height) <- Canvas.getCanvasSize
       (_, boxes) <-
-        runMeasuring
-          (blockToBoxes
-             (LS
-              {lsX = 0, lsY = (evScrollY ev), lsLineHeight = 0, lsMaxHeight = height})
-             width
-             defaultEvents
-             defaultStyle {styleWidth = Just width}
-             [(evContent ev)])
+        runReaderT
+          (runMeasuring
+             (blockToBoxes
+                (LS
+                 { lsX = 0
+                 , lsY = (evScrollY ev)
+                 , lsLineHeight = 0
+                 , lsMaxHeight = height
+                 })
+                width
+                defaultEvents
+                defaultStyle {styleWidth = Just width}
+                [(evContent ev)]))
+          scale
       mapM_
         (\box ->
            case box of
