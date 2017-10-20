@@ -207,7 +207,7 @@ eloop scale@(scalex, scaley) ev = do
                   0
                   (evScrollY ev +
                    (let V2 _ y = mouseWheelEventPos e
-                    in fromIntegral y))
+                    in fromIntegral y * scaley * 5))
             }
       boxes' <- rerender scaley ev'
       eloop scale ev' {evBoxes = boxes'}
