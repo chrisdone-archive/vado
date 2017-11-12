@@ -1,4 +1,6 @@
-# wish
+# vado
+
+**Vado** is Italian for *I go*.
 
 This is a **demonstration program** that is able to load a web page up
 and render it like in the early 90's. It supports laying out text,
@@ -74,6 +76,6 @@ Windows instructions
 
 It accepts an initial home page URL:
 
-    $ wish <complete URL including https or http>
+    $ vado <complete URL including https or http>
 
 It doesn't support back/forward or other history features.

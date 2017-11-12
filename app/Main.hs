@@ -137,7 +137,7 @@ main = do
   SDL.initialize [SDL.InitVideo, SDL.InitTimer, SDL.InitEvents]
   window <-
     SDL.createWindow
-      "Wish"
+      "Vado"
       SDL.defaultWindow
       { SDL.windowHighDPI = True
       , SDL.windowResizable = True
