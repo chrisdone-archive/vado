@@ -49,13 +49,14 @@ projects.
 
 OS X instructions:
 
-    $ brew install sdl2 cairo
+    $ brew install pkg-config libffi cairo sdl2 sdl2_image
+    $ export PKG_CONFIG_PATH=/usr/local/opt/libffi/lib/pkgconfig
     $ stack install --install-ghc gtk2hs-buildtools
     $ stack install
 
 Ubuntu Linux instructions:
 
-    $ sudo apt-get install libsdl2-dev libcairo2-dev
+    $ sudo apt-get install libcairo2-dev libsdl2-dev libsdl2-image-dev
     $ stack install --install-ghc gtk2hs-buildtools
     $ stack install
 
@@ -68,7 +69,7 @@ FreeBSD instructions:
 
 Windows instructions
 
-    $ stack exec -- pacman -Sy mingw-w64-x86_64-cairo mingw-w64-x86_64-pkg-config mingw-w64-x86_64-SDL2
+    $ stack exec -- pacman -Sy mingw-w64-x86_64-cairo mingw-w64-x86_64-pkg-config mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_image
     $ stack install --install-ghc gtk2hs-buildtools
     $ stack install
 
