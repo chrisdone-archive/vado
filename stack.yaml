@@ -3,7 +3,7 @@ packages:
 - .
 - location:
     git: https://github.com/haskell-game/sdl2.git
-    commit: a43c202511b5654680c45098e2c32c45c3655bc4
+    commit: bc30282eca6c04d1f910f2f3c96b0a64cf84f158
   extra-dep: true
 - location:
     git: https://github.com/chrisdone/sdl2-cairo.git
