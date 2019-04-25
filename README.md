@@ -49,7 +49,7 @@ projects.
 
 OS X instructions:
 
-    $ brew install sdl2 cairo
+    $ brew install pkg-config sdl2 cairo
     $ stack install --install-ghc gtk2hs-buildtools
     $ stack install
 
@@ -61,6 +61,7 @@ Ubuntu Linux instructions:
 
 FreeBSD instructions:
 
+    $ pkg install pkgconf
     $ pkg install cairo
     $ pkg install sdl2
     $ stack install --install-ghc gtk2hs-buildtools
