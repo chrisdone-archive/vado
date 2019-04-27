@@ -62,6 +62,8 @@ Ubuntu Linux instructions:
 
 FreeBSD instructions:
 
+**NOTE**: These instructions have not been updated to include SDL-image. If you use FreeBSD, please contribute changes to these instructions!
+
     $ pkg install cairo
     $ pkg install sdl2
     $ stack install --install-ghc gtk2hs-buildtools
