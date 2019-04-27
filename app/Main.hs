@@ -10,6 +10,7 @@ import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Reader
+import qualified Data.ByteString.Lazy as B
 import           Data.Char
 import qualified Data.HashMap.Strict as HM
 import           Data.List
@@ -26,6 +27,7 @@ import           Network.URI
 import qualified SDL as SDL
 import qualified SDL.Cairo as Cairo
 import qualified SDL.Cairo.Canvas as Canvas
+import qualified SDL.Image as Image
 import           SDL.Event as SDL
 import           SDL.Vect
 import           System.Environment
@@ -39,6 +41,7 @@ import qualified Text.XML as XML
 data Content
   = ElementContent !Text !Events !Style ![Content]
   | TextContent !Text
+  | ImageContent !Text !(Maybe (V2 Double)) !(Maybe SDL.Surface) -- !(Maybe Text)
 
 -- | Style for an element. Inheritable values are Maybes.
 data Style = Style
@@ -69,6 +72,7 @@ data FontWeight = NormalWeight | BoldWeight
 -- | A box to be displayed.
 data Box
   = RectBox !Canvas.Dim !(Maybe Canvas.Color)
+  | ImageBox !Canvas.Dim SDL.Surface
   | TextBox !Events !TextBox
 
 -- | A set of events that an element may handle.
@@ -137,7 +141,7 @@ main = do
   SDL.initialize [SDL.InitVideo, SDL.InitTimer, SDL.InitEvents]
   window <-
     SDL.createWindow
-      "Vado"
+      (T.concat ["Vado - ", T.pack url])
       SDL.defaultWindow
       { SDL.windowHighDPI = True
       , SDL.windowResizable = True
@@ -235,7 +239,27 @@ getContent request = do
   -- Parse the response body as possibly malformed HTML and convert that to an XML tree.
   let doc = XML.documentRoot (DOM.parseLBS (HTTP.responseBody response))
       content = elementToContent doc
-  pure content
+  fetchImages (manager, request) content
+
+fetchImages :: (HTTP.Manager, HTTP.Request) -> Content -> IO Content
+fetchImages http (ElementContent a b c elements) = do
+  elements' <- mapM (fetchImages http) elements
+  return (ElementContent a b c elements')
+fetchImages (manager, req) (ImageContent src dim0 Nothing) = do
+  let Just uri = parseURIReference (T.unpack src)
+  req' <- setUriRelative req uri
+  putStrLn ("Downloading: " ++ show req')
+  resp <- HTTP.httpLbs req' manager
+  let body = B.toStrict $ HTTP.responseBody resp
+  case Image.format body of
+    Just _ -> do
+      img <- Image.decode body
+      V2 dx dy <- SDL.surfaceDimensions img
+      let dim = dim0 <|> Just (V2 (fromIntegral dx) (fromIntegral dy))
+      return $ ImageContent src dim (Just img)
+    _ ->
+      return $ ImageContent src dim0 Nothing
+fetchImages _ t = return t
 
 --------------------------------------------------------------------------------
 -- Mouse events
@@ -268,8 +292,17 @@ xmlToContent :: XML.Node -> Maybe Content
 xmlToContent =
   \case
     XML.NodeElement element ->
-      if elem
-           (T.map toLower (XML.nameLocalName (XML.elementName element)))
+      if T.toLower (XML.nameLocalName (XML.elementName element)) == "img"
+      then do
+        let lookupAttribute attr node =
+              M.lookup (XML.Name attr Nothing Nothing) (XML.elementAttributes node)
+        src <- lookupAttribute "src" element
+        let w = (read . T.unpack) <$> lookupAttribute "width" element
+        let h = (read . T.unpack) <$> lookupAttribute "height" element
+        let dim = V2 <$> w <*> h
+        Just (ImageContent src dim Nothing)
+      else if elem
+           (T.toLower (XML.nameLocalName (XML.elementName element)))
            ignoreElements
         then Nothing
         else Just (elementToContent element)
@@ -280,7 +313,7 @@ xmlToContent =
     XML.NodeInstruction {} -> Nothing
     XML.NodeComment {} -> Nothing
   where
-    ignoreElements = ["head", "script", "style", "br", "hr", "img", "input"]
+    ignoreElements = ["head", "script", "style", "br", "hr", "input"]
 
 -- | Convert an element to some content.
 elementToContent :: XML.Element -> Content
@@ -329,6 +362,14 @@ blockToBoxes ls0 maxWidth events0 inheritedStyle nodes0 =
            (mapAccumM
               (\ls content ->
                  case content of
+                   ImageContent _ (Just (V2 dx dy)) (Just img) -> do
+                     let y = lsY ls
+                     let x = lsX ls
+                     let dim = Canvas.D x y dx dy
+                     let ls' = ls { lsX = x + dx, lsLineHeight = max (lsLineHeight ls) dy }
+                     pure (ls', [ImageBox dim img])
+                   ImageContent _ _ _ ->
+                     pure (ls, [])
                    TextContent t ->
                      textToBoxes ls events0 inheritedStyle maxWidth t
                    ElementContent _ events style nodes ->
@@ -364,6 +405,12 @@ inlineToBoxes ls0 maxWidth events0 inheritedStyle nodes0 = do
            (mapAccumM
               (\ls content ->
                  case content of
+                   ImageContent _ (Just (V2 dx dy)) (Just img) -> do
+                     let ls' = ls { lsX = lsX ls + dx, lsLineHeight = dy }
+                     let dim = Canvas.D (lsX ls) (lsY ls) dx dy
+                     pure (ls', [ImageBox dim img])
+                   ImageContent _ _ _ ->
+                     pure (ls, [])
                    TextContent t ->
                      textToBoxes ls events0 inheritedStyle maxWidth t
                    ElementContent _ events style nodes ->
@@ -478,10 +525,20 @@ rerender scale ev = do
                     (case textStyle text of
                        ItalicStyle -> True
                        NormalStyle -> False))
-               Canvas.textBaseline (T.unpack (textText text)) (textXY text))
+               Canvas.textBaseline (T.unpack (textText text)) (textXY text)
+             _ -> return ())
         boxes
       pure boxes
   SDL.copy (evRenderer ev) (evTexture ev) Nothing Nothing
+  forM_ boxes $ \case
+    ImageBox (Canvas.D x y dx dy) img -> do
+      texture <- SDL.createTextureFromSurface (evRenderer ev) img
+      let pos = V2 (round x) (round y)
+      let size = V2 (round  dx) (round dy)
+      let dim = SDL.Rectangle (P pos) size
+      SDL.copy (evRenderer ev) texture Nothing (Just dim)
+      return ()
+    _ -> return ()
   SDL.present (evRenderer ev)
   pure boxes
 

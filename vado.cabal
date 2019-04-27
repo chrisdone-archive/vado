@@ -21,6 +21,7 @@ executable vado
                      , linear
                      , sdl2
                      , sdl2-cairo
+                     , sdl2-image
                      , http-client
                      , http-types
                      , html-conduit
